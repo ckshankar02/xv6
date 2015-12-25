@@ -1,9 +1,9 @@
 #!/bin/sh
 
 KEYFILE="$HOME/.ssh/id_rsa"
-BASE_URL="https://exokernel.scripts.mit.edu/submit/"
+BASE_URL="https://pdos.csail.mit.edu/6.828/submit/"
 PK_URL="$BASE_URL""setpubkey"
-SSH_HOST="josgit@exokernel.mit.edu"
+SSH_HOST="josgit@am.csail.mit.edu"
 GIT_URL="ssh://$SSH_HOST/joslab.git"
 REPO="handin"
 
