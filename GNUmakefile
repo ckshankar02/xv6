@@ -49,7 +49,9 @@ endif
 
 # try to infer the correct QEMU
 ifndef QEMU
-QEMU := $(shell if which qemu > /dev/null; \
+QEMU := $(shell if which qemu.jos > /dev/null; \
+	then echo qemu.jos; exit; \
+	elif which qemu > /dev/null; \
 	then echo qemu; exit; \
 	else \
 	qemu=/Applications/Q.app/Contents/MacOS/i386-softmmu.app/Contents/MacOS/i386-softmmu; \
@@ -71,6 +73,11 @@ LD	:= $(GCCPREFIX)ld
 OBJCOPY	:= $(GCCPREFIX)objcopy
 OBJDUMP	:= $(GCCPREFIX)objdump
 NM	:= $(GCCPREFIX)nm
+
+# binutils-gold has problems with parsing -Ttext right
+ifneq ($(shell which $(LD).bfd 2>/dev/null),)
+LD := $(LD).bfd
+endif
 
 # Native commands
 NCC	:= gcc $(CC_VER) -pipe
@@ -132,15 +139,19 @@ include boot/Makefrag
 include kern/Makefrag
 
 
-QEMUOPTS = -hda $(OBJDIR)/kern/kernel.img -serial mon:stdio -gdb tcp::$(GDBPORT)
+#QEMUOPTS = -hda $(OBJDIR)/kern/kernel.img -serial mon:stdio -gdb tcp::$(GDBPORT) 
+QEMUOPTS = -drive file=$(OBJDIR)/kern/kernel.img,format=raw -serial mon:stdio -gdb tcp::$(GDBPORT) 
 QEMUOPTS += $(shell if $(QEMU) -nographic -help | grep -q '^-D '; then echo '-D qemu.log'; fi)
 IMAGES = $(OBJDIR)/kern/kernel.img
 QEMUOPTS += $(QEMUEXTRA)
 
-.gdbinit: .gdbinit.tmpl
+.gdbrc: .gdbrc.tmpl
 	sed "s/localhost:1234/localhost:$(GDBPORT)/" < $^ > $@
 
-pre-qemu: .gdbinit
+gdb: .gdbrc
+	gdb -x .gdbrc
+
+pre-qemu: .gdbrc
 
 qemu: $(IMAGES) pre-qemu
 	$(QEMU) $(QEMUOPTS)
@@ -153,13 +164,13 @@ qemu-nox: $(IMAGES) pre-qemu
 
 qemu-gdb: $(IMAGES) pre-qemu
 	@echo "***"
-	@echo "*** Now run 'gdb'." 1>&2
+	@echo "*** Now run 'make gdb'." 1>&2
 	@echo "***"
 	$(QEMU) $(QEMUOPTS) -S
 
 qemu-nox-gdb: $(IMAGES) pre-qemu
 	@echo "***"
-	@echo "*** Now run 'gdb'." 1>&2
+	@echo "*** Now run 'make gdb'." 1>&2
 	@echo "***"
 	$(QEMU) -nographic $(QEMUOPTS) -S
 
@@ -171,7 +182,7 @@ print-gdbport:
 
 # For deleting the build
 clean:
-	rm -rf $(OBJDIR) .gdbinit jos.in qemu.log
+	rm -rf $(OBJDIR) .gdbrc jos.in qemu.log
 
 realclean: clean
 	rm -rf lab$(LAB).tar.gz \
@@ -191,14 +202,14 @@ grade:
 	  (echo "'make clean' failed.  HINT: Do you have another running instance of JOS?" && exit 1)
 	./grade-lab$(LAB) $(GRADEFLAGS)
 
-handin:
+handin: handin-check
 	@if test -n "`git config remote.handin.url`"; then \
 		echo "Hand in to remote repository using 'git push handin HEAD' ..."; \
 		if ! git push -f handin HEAD; then \
             echo ; \
 			echo "Hand in failed."; \
 			echo "As an alternative, please run 'make tarball'"; \
-			echo "and visit http://pdos.csail.mit.edu/6.828/submit/"; \
+			echo "and visit https://exokernel.scripts.mit.edu/submit/"; \
 			echo "to upload lab$(LAB)-handin.tar.gz.  Thanks!"; \
 			false; \
 		fi; \
@@ -247,4 +258,4 @@ always:
 	@:
 
 .PHONY: all always \
-	handin tarball clean realclean distclean grade handin-prep handin-check
+	handin tarball clean realclean distclean grade handin-prep handin-check gdb

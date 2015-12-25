@@ -12,7 +12,8 @@
 #include <kern/kdebug.h>
 
 #define CMDBUF_SIZE	80	// enough for one VGA text line
-
+#define INC 'u'
+#define DEC 'd'
 
 struct Command {
 	const char *name;
@@ -24,6 +25,7 @@ struct Command {
 static struct Command commands[] = {
 	{ "help", "Display this list of commands", mon_help },
 	{ "kerninfo", "Display information about the kernel", mon_kerninfo },
+	{ "backtrace", "Display information about the kernel", mon_backtrace },
 };
 #define NCOMMANDS (sizeof(commands)/sizeof(commands[0]))
 
@@ -55,10 +57,33 @@ mon_kerninfo(int argc, char **argv, struct Trapframe *tf)
 	return 0;
 }
 
+uint32_t addr_off(uint32_t addr, int offset, char dir) {
+	uint32_t *new_addr;
+	int off_byte = offset*(sizeof(uint32_t));
+	if(dir == INC)
+		new_addr = (uint32_t *)(addr+off_byte);
+	else 
+		new_addr = (uint32_t *)(addr-off_byte);
+	return *new_addr;
+}
+
+
 int
 mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 {
 	// Your code here.
+	uint32_t curr_ebp, ret_eip;
+	struct Eipdebuginfo info;
+
+	curr_ebp = read_ebp();
+	cprintf("Stack backtrace:\n");
+	do {
+		ret_eip = addr_off(curr_ebp, 1, INC);
+		cprintf("  ebp %08x  eip %08x  args %08x %08x %08x %08x %08x\n",curr_ebp, ret_eip, addr_off(curr_ebp, 2, INC), addr_off(curr_ebp, 3, INC), addr_off(curr_ebp,3, INC), addr_off(curr_ebp, 4, INC), addr_off(curr_ebp, 5, INC));
+		debuginfo_eip(ret_eip, &info);
+		cprintf("      %s:%d: %.*s+%d\n",info.eip_file, info.eip_line, info.eip_fn_namelen, info.eip_fn_name,(ret_eip-info.eip_fn_addr));
+		curr_ebp = *(uint32_t *) curr_ebp;
+	} while(curr_ebp);
 	return 0;
 }
 
